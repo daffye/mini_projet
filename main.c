@@ -4,6 +4,7 @@
 #include <math.h>
 
 #include "ch.h"
+#include "chprintf.h"
 #include "hal.h"
 #include "memory_protection.h"
 #include "sensors/proximity.h"
@@ -51,6 +52,8 @@ int main(void)
     /** Inits the Inter Process Communication bus. */
       messagebus_init(&bus, &bus_lock, &bus_condvar);
 
+    clear_leds();
+    set_body_led(0);
     //starts the serial communication
     serial_start();
     //start the USB communication
