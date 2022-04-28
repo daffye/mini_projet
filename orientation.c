@@ -94,8 +94,11 @@ void turn_to(int angle){
     right_motor_set_speed(-movement_info.turn_direction*MOTOR_SPEED_LIMIT/2);
 
     // Turns until the desired angle is reached
-    //while ((abs(left_motor_get_pos()) < abs((angle/FULL_PERIMETER_DEG)*NSTEP_ONE_TURN*CORRECTION_FACTOR))
-    	//&& (abs(right_motor_get_pos()) < abs((angle/FULL_PERIMETER_DEG)*NSTEP_ONE_TURN*CORRECTION_FACTOR))) {
-	//}
+    while ((abs(left_motor_get_pos()) < abs((angle/FULL_PERIMETER_DEG)*NSTEP_ONE_TURN*CORRECTION_FACTOR))
+    	&& (abs(right_motor_get_pos()) < abs((angle/FULL_PERIMETER_DEG)*NSTEP_ONE_TURN*CORRECTION_FACTOR))) {
+	}
     halt();
+}
+
+void avoid_obstacle(void){
 }
