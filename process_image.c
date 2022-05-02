@@ -2,9 +2,11 @@
 #include "hal.h"
 #include <chprintf.h>
 #include <usbcfg.h>
+#include <stdio.h>
 
 #include <main.h>
 #include <camera/po8030.h>
+#include <leds.h>
 
 #include <process_image.h>
 
@@ -37,7 +39,7 @@ uint16_t extract_line_width(uint8_t *buffer){
 		wrong_line = 0;
 		//search for a begin
 		while(stop == 0 && i < (IMAGE_BUFFER_SIZE - WIDTH_SLOPE))
-		{ 
+		{
 			//the slope must at least be WIDTH_SLOPE wide and is compared
 		    //to the mean of the image
 		    if(buffer[i] > mean && buffer[i+WIDTH_SLOPE] < mean)
@@ -51,7 +53,7 @@ uint16_t extract_line_width(uint8_t *buffer){
 		if (i < (IMAGE_BUFFER_SIZE - WIDTH_SLOPE) && begin)
 		{
 		    stop = 0;
-		    
+
 		    while(stop == 0 && i < IMAGE_BUFFER_SIZE)
 		    {
 		        if(buffer[i] > mean && buffer[i-WIDTH_SLOPE] < mean)
@@ -134,11 +136,14 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 	bool send_to_computer = true;
 
+
     while(1){
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
 		//gets the pointer to the array filled with the last image in RGB565    
 		img_buff_ptr = dcmi_get_last_image_ptr();
+
+		color_detection();
 
 		//Extracts only the red pixels
 		for(uint16_t i = 0 ; i < (2 * IMAGE_BUFFER_SIZE) ; i+=2){
@@ -175,4 +180,66 @@ uint16_t get_line_position(void){
 void process_image_start(void){
 	chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO, ProcessImage, NULL);
 	chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
+}
+
+
+void color_detection(void){
+
+	uint8_t *img_buff_ptr;
+	uint8_t red[IMAGE_BUFFER_SIZE] = {0};
+	uint8_t green[IMAGE_BUFFER_SIZE] = {0};
+	uint8_t blue[IMAGE_BUFFER_SIZE] = {0};
+	uint8_t average_red = 0;
+	uint8_t average_blue = 0;
+	uint8_t average_green = 0;
+	uint8_t average = 0;
+
+	//waits until an image has been captured
+    chBSemWait(&image_ready_sem);
+	//gets the pointer to the array filled with the last image in RGB565
+	img_buff_ptr = dcmi_get_last_image_ptr();
+
+
+	//Extracts only the red pixels
+	for(uint16_t i = 1 ; i < (2 * IMAGE_BUFFER_SIZE) ; i+=2){
+		//extracts first 5bits of the first byte
+		//takes nothing from the second byte
+		red[(i-1)/2] = (uint8_t)img_buff_ptr[(i-1)/2]&0xF8>>3;
+		green[(i-1)/2]= ((uint8_t)img_buff_ptr[(i-1)/2]&0x07 << 3) + ((uint8_t)img_buff_ptr[i]&0x70 >> 5);
+		blue[(i-1)/2]= (uint8_t)img_buff_ptr[i]&0x1F;
+		average_red = average_red + red[(i-1)/2];
+		average_blue = average_blue + blue[(i-1)/2];
+		average_green = average_green + green[(i-1)/2];
+
+	}
+
+	/*  autre bout de code
+	 * image_R[i] = (img_buff_ptr[i*2] & 0b11111000);
+		mean_R += image_R[i];
+		image_G[i] = ((img_buff_ptr[i*2] & 0b00000111)<<5) + ((img_buff_ptr[i*2+1] & 0b11100000)>>3);
+		mean_G += image_G[i];
+		image_B[i] = ((img_buff_ptr[i*2+1] & 0b00011111)<<3);
+		mean_B += image_B[i];
+	 */
+
+	average_red = average_red / 2*IMAGE_BUFFER_SIZE;
+	average_blue = average_blue / 2*IMAGE_BUFFER_SIZE;
+	average_green = average_green / 2*IMAGE_BUFFER_SIZE;
+	//printf("test");
+	average = (average_red + average_blue + average_green) /3;
+
+	if (average_red > average){
+		printf("r");
+		set_body_led(0);
+	}
+
+	else if (average_blue > average){
+		printf("b");
+		set_body_led(1);
+		}
+
+	else if ((average_red > average) & (average_green> average)){
+		printf("y");
+		set_body_led(0);
+		}
 }

@@ -48,6 +48,8 @@ int main(void)
     chSysInit();
     mpu_init();
 
+    printf("boi");
+
     /** Inits the Inter Process Communication bus. */
       messagebus_init(&bus, &bus_lock, &bus_condvar);
 
