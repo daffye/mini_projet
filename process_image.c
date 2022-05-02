@@ -136,14 +136,13 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 	bool send_to_computer = true;
 
-
     while(1){
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
 		//gets the pointer to the array filled with the last image in RGB565    
 		img_buff_ptr = dcmi_get_last_image_ptr();
 
-		color_detection();
+		//color_detection();
 
 		//Extracts only the red pixels
 		for(uint16_t i = 0 ; i < (2 * IMAGE_BUFFER_SIZE) ; i+=2){
@@ -229,12 +228,10 @@ void color_detection(void){
 	average = (average_red + average_blue + average_green) /3;
 
 	if (average_red > average){
-		printf("r");
 		set_body_led(0);
 	}
 
 	else if (average_blue > average){
-		printf("b");
 		set_body_led(1);
 		}
 

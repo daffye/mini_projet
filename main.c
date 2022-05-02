@@ -48,8 +48,6 @@ int main(void)
     chSysInit();
     mpu_init();
 
-    printf("boi");
-
     /** Inits the Inter Process Communication bus. */
       messagebus_init(&bus, &bus_lock, &bus_condvar);
 
@@ -63,7 +61,7 @@ int main(void)
 	//inits the motors
 	motors_init();
 	//start proximity sensors
-	proximity_start();
+	//proximity_start();
 	// start obstacle avoid + selector position, tourne en fct de la position du selector
 	movement_init();
 
