@@ -6,6 +6,7 @@
 #include "ch.h"
 #include "chprintf.h"
 #include "hal.h"
+#include "leds.h"
 #include "memory_protection.h"
 #include "sensors/proximity.h"
 #include <usbcfg.h>
@@ -61,6 +62,8 @@ int main(void)
     //starts the camera
     dcmi_start();
 	po8030_start();
+	// auto white balance disable
+	po8030_set_awb(0);
 	//inits the motors
 	motors_init();
 	//start proximity sensors
