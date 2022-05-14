@@ -1,45 +1,200 @@
 #include "ch.h"
 #include <stdlib.h>
-#include <orientation.h>
 #include "pi_regulator.h"
 #include "process_image.h"
 #include "sensors/proximity.h"
+#include "sensors/VL53L0X/VL53L0X.h"
 #include "motors.h"
+#include <mouvement.h>
+#include <main.h>
+#include "chprintf.h"
+#include "leds.h"
 
-static BSEMAPHORE_DECL(no_obstacle_sem, TRUE);
-static BSEMAPHORE_DECL(goal_not_reached_sem, FALSE); //FALSE so MovementControl can start first
+
+static struct movement{
+
+	// Determines current turning direction, Determines general side to get arround the obstacle
+	enum {
+		LEFT=-1,
+		RIGHT=1
+	} turn_direction;
+
+} movement_info;
+
+void halt(void){
+
+	left_motor_set_speed(0);
+	right_motor_set_speed(0);
+}
+
+void go_forward(void){
+
+	left_motor_set_speed(SPEED);
+	right_motor_set_speed(SPEED);
+}
+
+void advance_distance(uint16_t distance){
+
+	go_forward();
+	left_motor_set_pos(0);
+	right_motor_set_pos(0);
+
+	while (left_motor_get_pos() < (distance/CONVERSION_CM_MM)* NSTEP_ONE_TURN / WHEEL_PERIMETER) {
+	}
+	halt();
+}
+
+void init_movement(void){
+	movement_info.turn_direction = RIGHT;
+}
+
+void turn_to(float angle){
+
+	left_motor_set_pos(0);
+	right_motor_set_pos(0);
+	// The e-puck will pivot on itself
+	left_motor_set_speed(movement_info.turn_direction*SPEED);
+	right_motor_set_speed(-movement_info.turn_direction*SPEED);
+
+	// Turns until the desired angle is reached
+	while ((abs(left_motor_get_pos()) < abs((angle/FULL_PERIMETER_DEG)*NSTEP_ONE_TURN*CORRECTION))
+			&& (abs(right_motor_get_pos()) < abs((angle/FULL_PERIMETER_DEG)*NSTEP_ONE_TURN*CORRECTION))) {
+	}
+	movement_info.turn_direction = LEFT;
+	halt();
+}
+
+uint8_t tof_adjust(void){
+	if(VL53L0X_get_dist_mm() < TOF_FAR){
+		return TRUE;
+	}
+	return FALSE;
+}
+
+uint8_t obstacle_right(void){
+	if(get_prox(IR2) > DETECTION_DISTANCE
+			|| get_prox(IR3) > DETECTION_DISTANCE){
+		return TRUE;
+	}
+	return FALSE;
+}
+
+uint8_t obstacle_left(void){
+	if(get_prox(IR6) > DETECTION_DISTANCE
+			|| get_prox(IR7) > DETECTION_DISTANCE){
+		return TRUE;
+	}
+	return FALSE;
+}
 
 uint8_t obstacle_on_front(void){
 
-    if(get_prox(FRONT_FRONT_RIGHT_SENSOR) > DETECTION_DISTANCE
-    || get_prox(FRONT_FRONT_LEFT_SENSOR) > DETECTION_DISTANCE
-    || get_prox(FRONT_LEFT_SENSOR) > DETECTION_DISTANCE
-    || get_prox(FRONT_LEFT_SENSOR) > DETECTION_DISTANCE){
+	//chprintf((BaseSequentialStream *)&SD3, "%d\n\t", VL53L0X_get_dist_mm());
+	if(VL53L0X_get_dist_mm() < TOF_MIN){
 		return TRUE;
 	}
-    return FALSE;
+	return FALSE;
 }
 
-static THD_WORKING_AREA(waMovementControl, 128);
-static THD_FUNCTION(MovementControl, arg) {
+static THD_WORKING_AREA(waAvoidObstacle, 128);
+static THD_FUNCTION(AvoidObstacle, arg) {
 
-    chRegSetThreadName(__FUNCTION__);
-    (void)arg;
+	chRegSetThreadName(__FUNCTION__);
+	//uint8_t left=0;
+	(void)arg;
 
-    while(1) {
+	while(1) {
 
-        //waits until the PiRegulator has set up the motors
-        chBSemWait(&goal_not_reached_sem);
+		init_movement();
+		//go_forward();
 
 		if(obstacle_on_front()){
-            avoid_obstacle();
+			halt();
+			while(tof_adjust()){
+				left_motor_set_speed(movement_info.turn_direction*SPEED);
+				right_motor_set_speed(-movement_info.turn_direction*SPEED);
+			}
+			halt();
+			advance_distance(PETITE_DIST);
+			turn_to(CORRECTION_ANGLE);
+			init_movement();
+			advance_distance(MOY_DIST);
+			turn_to(CORRECTION_ANGLE);
+			halt();
+			while(obstacle_left()){
+				go_forward();
+			}
+			halt();
+			advance_distance(EPUCK_RADIUS);
+			turn_to(STANDARD_TURN_ANGLE);
+			advance_distance(EPUCK_RADIUS);
+			while(obstacle_left()){
+				go_forward();
+			}
+			halt();
+			advance_distance(EPUCK_RADIUS);
+			turn_to(STANDARD_TURN_ANGLE);
+			advance_distance(GRD_DIST);
+			init_movement();
+			turn_to(STANDARD_TURN_ANGLE);
 		}
-		chBSemSignal(&no_obstacle_sem);
-    }
+		chThdSleepMilliseconds(100);
+	}
 }
 
-void movement_start(void){
+static THD_WORKING_AREA(waPiRegulator, 256);
+static THD_FUNCTION(PiRegulator, arg) {
 
-    //has a higher priority compared to the ProcessImage thread to avoid hitting an obstacle, which is more important
-	chThdCreateStatic(waMovementControl, sizeof(waMovementControl), NORMALPRIO+1, MovementControl, NULL);
+	chRegSetThreadName(__FUNCTION__);
+	(void)arg;
+
+	systime_t time;
+
+	int16_t speed = 0;
+	int16_t speed_correction = 0;
+
+	right_motor_set_speed(SPEED);
+	left_motor_set_speed(SPEED);
+
+	chThdSleepMilliseconds(500);   // wait until the rotation is completed before going into the pi control speed
+
+	while(1){
+		time = chVTGetSystemTime();
+		//waits until the object detection has passed
+		//chBSemWait(&no_obstacle_sem);
+
+		//computes the speed to give to the motors
+		//distance_cm is modified by the image processing thread
+		//speed = pi_regulator(get_distance_cm(), GOAL_DISTANCE);
+		speed = SPEED;
+		//computes a correction factor to let the robot rotate to be in front of the line
+		speed_correction = (get_line_position() - (IMAGE_BUFFER_SIZE/2));
+
+		//if the line is nearly in front of the camera, don't rotate
+		if(abs(speed_correction) < ROTATION_THRESHOLD){
+			speed_correction = 0;
+		}
+
+		//applies the speed from the PI regulator and the correction for the rotation
+		right_motor_set_speed(speed - ROTATION_COEFF * speed_correction);
+		left_motor_set_speed(speed + ROTATION_COEFF * speed_correction);
+
+		//		if ((speed == 0) ) {  // when line is found, stop the motors and start light choreography
+		//		}
+		//		else {
+		//		    //signals that the goal has not been reached and that the object detection can start again
+		//			chBSemSignal(&goal_not_reached_sem);
+		//}
+		chThdSleepMilliseconds(100);
+	}
+}
+
+
+void pi_regulator_start(void){
+	chThdCreateStatic(waPiRegulator, sizeof(waPiRegulator), NORMALPRIO, PiRegulator, NULL);
+}
+
+void avoid_start(void){
+	//has a higher priority compared to the ProcessImage thread to avoid hitting an obstacle, which is more important
+	chThdCreateStatic(waAvoidObstacle, sizeof(waAvoidObstacle), NORMALPRIO+1, AvoidObstacle, NULL);
 }
