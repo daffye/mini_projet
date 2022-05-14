@@ -9,6 +9,7 @@
 #include "leds.h"
 #include "memory_protection.h"
 #include "sensors/proximity.h"
+#include "sensors/VL53L0X/VL53L0X.h"
 #include <usbcfg.h>
 #include <main.h>
 #include <motors.h>
@@ -17,7 +18,6 @@
 
 #include <pi_regulator.h>
 #include <process_image.h>
-#include <orientation.h>
 #include <mouvement.h>
 
 messagebus_t bus;
@@ -59,6 +59,7 @@ int main(void)
     serial_start();
     //start the USB communication
     usb_start();
+    //spi_comm_start();
     //starts the camera
     dcmi_start();
 	po8030_start();
@@ -68,18 +69,15 @@ int main(void)
 	motors_init();
 	//start proximity sensors
 	proximity_start();
-	// start obstacle avoid + selector position, tourne en fct de la position du selector
-	movement_init();
+	VL53L0X_start();
 
 	//wait until the peripherals have been correctly initialized
 	chThdSleepMilliseconds(500);
 
-	// start movement control thread
-	movement_start();
-
+	process_image_start();
 	//stars the threads for the pi regulator and the processing of the image
 	pi_regulator_start();
-	process_image_start();
+	avoid_start();
 
     /* Infinite loop. */
     while (1) {
