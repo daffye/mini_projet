@@ -96,6 +96,65 @@ uint8_t obstacle_on_front(void){
 	return FALSE;
 }
 
+void intersection(void){
+	uint8_t temp_color;
+	uint8_t target_color = get_target_color();
+	bool color_found = false;
+
+	advance_distance(47);
+	halt();
+	//left_motor_set_speed(0);
+	//right_motor_set_speed(0);
+
+	chprintf((BaseSequentialStream *)&SD3, "90 %d\r\n");
+	init_movement();
+	turn_to(90);  //tourne d'un angle droit à droite
+	temp_color = color_detection();
+	chprintf((BaseSequentialStream *)&SD3, "boi %d\r\n");
+
+
+	if(temp_color == target_color){
+		left_motor_set_speed(0);
+		right_motor_set_speed(0);
+		advance_distance(30);
+		left_motor_set_speed(0);
+		right_motor_set_speed(0);
+		color_found = true;
+
+	}
+	//si la couleur vue est la même que celle qu'il a enregistrée alors il fonce + break
+	if(color_found == false){
+		halt();
+		turn_to(90); //tourne d'un angle droit à gauche
+		temp_color = color_detection();
+		if(temp_color == target_color){
+			left_motor_set_speed(0);
+			right_motor_set_speed(0);
+			advance_distance(30);
+			left_motor_set_speed(0);
+			right_motor_set_speed(0);
+
+			color_found=true;
+		}
+	}
+
+	//si la couleur vue est la même que celle qu'il a enregistrée alors il fonce + break
+	if(color_found == false){
+		halt();
+		turn_to(90); //tourne d'un angle droit à gauche encore
+		temp_color = color_detection();
+		if(temp_color == target_color){
+			left_motor_set_speed(0);
+			right_motor_set_speed(0);
+			advance_distance(30);
+			left_motor_set_speed(0);
+			right_motor_set_speed(0);
+
+			color_found=true;
+		}
+	}
+}
+
 static THD_WORKING_AREA(waAvoidObstacle, 128);
 static THD_FUNCTION(AvoidObstacle, arg) {
 
@@ -176,8 +235,10 @@ static THD_FUNCTION(PiRegulator, arg) {
 		}
 
 		//applies the speed from the PI regulator and the correction for the rotation
-		right_motor_set_speed(speed - ROTATION_COEFF * speed_correction);
-		left_motor_set_speed(speed + ROTATION_COEFF * speed_correction);
+		if(get_intersection_bool() != 1){
+			right_motor_set_speed(speed - ROTATION_COEFF * speed_correction);
+			left_motor_set_speed(speed + ROTATION_COEFF * speed_correction);
+		}
 
 		//		if ((speed == 0) ) {  // when line is found, stop the motors and start light choreography
 		//		}
@@ -196,5 +257,5 @@ void pi_regulator_start(void){
 
 void avoid_start(void){
 	//has a higher priority compared to the ProcessImage thread to avoid hitting an obstacle, which is more important
-	chThdCreateStatic(waAvoidObstacle, sizeof(waAvoidObstacle), NORMALPRIO+1, AvoidObstacle, NULL);
+	chThdCreateStatic(waAvoidObstacle, sizeof(waAvoidObstacle), NORMALPRIO, AvoidObstacle, NULL);
 }
