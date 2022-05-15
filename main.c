@@ -13,12 +13,9 @@
 #include <motors.h>
 #include <camera/po8030.h>
 #include <chprintf.h>
-//#include "spi_comm.h"
-#include "leds.h"
 
 #include <pi_regulator.h>
 #include <process_image.h>
-//#include <orientation.h>
 #include <mouvement.h>
 
 messagebus_t bus;
@@ -55,13 +52,10 @@ int main(void)
     /** Inits the Inter Process Communication bus. */
       messagebus_init(&bus, &bus_lock, &bus_condvar);
 
-    clear_leds();
-    set_body_led(0);
     //starts the serial communication
     serial_start();
     //start the USB communication
     usb_start();
-    //spi_comm_start();    //voir eventuellement les reinclude si jamais ca bug avec les periphs
     //starts the camera
     dcmi_start();
 	po8030_start();
@@ -75,7 +69,7 @@ int main(void)
 	//wait until the peripherals have been correctly initialized
 	chThdSleepMilliseconds(500);
 
-	//stars the threads for the pi regulator and the processing of the image
+	//Initialization of the threads for image processing, PI regulator and obstacle detection
 	process_image_start();
 	pi_regulator_start();
 	avoid_start();

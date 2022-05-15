@@ -8,12 +8,10 @@
 #include <mouvement.h>
 #include <main.h>
 #include "chprintf.h"
-#include "leds.h"
-
 
 static struct movement{
 
-	// Determines current turning direction, Determines general side to get arround the obstacle
+	// Determines current turning direction. Determines general side to get arround the obstacle
 	enum {
 		LEFT=-1,
 		RIGHT=1
@@ -21,19 +19,19 @@ static struct movement{
 
 } movement_info;
 
-void halt(void){
+void halt(void){  //Stop the motors
 
 	left_motor_set_speed(0);
 	right_motor_set_speed(0);
 }
 
-void go_forward(void){
+void go_forward(void){  //advance at a constant speed
 
 	left_motor_set_speed(SPEED);
 	right_motor_set_speed(SPEED);
 }
 
-void advance_distance(uint16_t distance){
+void advance_distance(uint16_t distance){  //advance at a given distance [mm]
 
 	go_forward();
 	left_motor_set_pos(0);
@@ -48,7 +46,7 @@ void init_movement(void){
 	movement_info.turn_direction = RIGHT;
 }
 
-void turn_to(float angle){
+void turn_to(float angle){	//allows to rotate the robot by a given angle
 
 	left_motor_set_pos(0);
 	right_motor_set_pos(0);
@@ -64,22 +62,14 @@ void turn_to(float angle){
 	halt();
 }
 
-uint8_t tof_adjust(void){
+uint8_t tof_adjust(void){		//allows to turn until the TOF sensor detects under a certain threshold
 	if(VL53L0X_get_dist_mm() < TOF_FAR){
 		return TRUE;
 	}
 	return FALSE;
 }
 
-uint8_t obstacle_right(void){
-	if(get_prox(IR2) > DETECTION_DISTANCE
-			|| get_prox(IR3) > DETECTION_DISTANCE){
-		return TRUE;
-	}
-	return FALSE;
-}
-
-uint8_t obstacle_left(void){
+uint8_t obstacle_left(void){	//uses the IR sensors to detect an obstacle on its left
 	if(get_prox(IR6) > DETECTION_DISTANCE
 			|| get_prox(IR7) > DETECTION_DISTANCE){
 		return TRUE;
@@ -87,7 +77,7 @@ uint8_t obstacle_left(void){
 	return FALSE;
 }
 
-uint8_t obstacle_on_front(void){
+uint8_t obstacle_on_front(void){	//uses the TOF to detect an object in front
 
 	//chprintf((BaseSequentialStream *)&SD3, "%d\n\t", VL53L0X_get_dist_mm());
 	if(VL53L0X_get_dist_mm() < TOF_MIN){
@@ -96,43 +86,31 @@ uint8_t obstacle_on_front(void){
 	return FALSE;
 }
 
-void intersection(void){
+void intersection(void){	//deals with intersections
 	uint8_t temp_color;
 	uint8_t target_color = get_target_color();
 	bool color_found = false;
 
-	advance_distance(47);
+	advance_distance(DIST_INTERSECT);
 	halt();
-	//left_motor_set_speed(0);
-	//right_motor_set_speed(0);
 
-	chprintf((BaseSequentialStream *)&SD3, "90 %d\r\n");
 	init_movement();
-	turn_to(90);  //tourne d'un angle droit à droite
+	turn_to(STANDARD_TURN_ANGLE);
 	temp_color = color_detection();
-	chprintf((BaseSequentialStream *)&SD3, "boi %d\r\n");
 
-
-	if(temp_color == target_color){
-		left_motor_set_speed(0);
-		right_motor_set_speed(0);
-		advance_distance(30);
-		left_motor_set_speed(0);
-		right_motor_set_speed(0);
+	if(temp_color == target_color){		//scans the color on the ground and if it matches the reference color then it continues on that path.
+		halt();
+		advance_distance(DIST_TO_PATH);
 		color_found = true;
 	}
-	//si la couleur vue est la même que celle qu'il a enregistrée alors il fonce + break
-	if(color_found == false){
+
+	if(color_found == false){			//same test as above but for another color
 		halt();
-		turn_to(180); //tourne d'un angle droit à gauche
+		turn_to(2*STANDARD_TURN_ANGLE);
 		temp_color = color_detection();
 		if(temp_color == target_color){
-			left_motor_set_speed(0);
-			right_motor_set_speed(0);
-			advance_distance(30);
-			left_motor_set_speed(0);
-			right_motor_set_speed(0);
-
+			halt();
+			advance_distance(DIST_TO_PATH);
 			color_found=true;
 		}
 	}
@@ -142,16 +120,14 @@ static THD_WORKING_AREA(waAvoidObstacle, 128);
 static THD_FUNCTION(AvoidObstacle, arg) {
 
 	chRegSetThreadName(__FUNCTION__);
-	//uint8_t left=0;
 	(void)arg;
 
 	while(1) {
 
 		init_movement();
-		//go_forward();
 
-		if(obstacle_on_front()){
-			halt();
+		if(obstacle_on_front()){					//initializes obstacle detection if TOF picks up a signal under a threshold
+			halt();									//Rotates to be parallel with the obstacle
 			while(tof_adjust()){
 				left_motor_set_speed(movement_info.turn_direction*SPEED);
 				right_motor_set_speed(-movement_info.turn_direction*SPEED);
@@ -163,80 +139,25 @@ static THD_FUNCTION(AvoidObstacle, arg) {
 			advance_distance(PETITE_DIST);
 			turn_to(CORRECTION_ANGLE);
 			halt();
-			while(obstacle_left()){
+			while(obstacle_left()){					//Begins passing by the obstacle
 				go_forward();
 			}
 			halt();
-			advance_distance(EPUCK_RADIUS);
-			turn_to(STANDARD_TURN_ANGLE); //ca le fait tourner a droite au lieu d'aller a gauche
-			advance_distance(DISTANCE);
-			while(obstacle_left()){
+			advance_distance(BYPASS_CORRECTION);
+			turn_to(STANDARD_TURN_ANGLE); 			//90° angle to be parallel to the side of the object
+			advance_distance(BYPASS_CORRECTION);	//previously DISTANCE
+			while(obstacle_left()){					//begins passing by the obstacle
 				go_forward();
 			}
 			halt();
-			advance_distance(EPUCK_RADIUS);
-			turn_to(STANDARD_TURN_ANGLE);
+			advance_distance(BYPASS_CORRECTION);
+			turn_to(STANDARD_TURN_ANGLE);			// 90° angle to be parallel to the back of the object
 			advance_distance(GRD_DIST);
 			init_movement();
-			turn_to(STANDARD_TURN_ANGLE);
+			turn_to(STANDARD_TURN_ANGLE);			//90° angle to go back to its initial trajectory
 		}
 		chThdSleepMilliseconds(100);
 	}
-}
-
-static THD_WORKING_AREA(waPiRegulator, 256);
-static THD_FUNCTION(PiRegulator, arg) {
-
-	chRegSetThreadName(__FUNCTION__);
-	(void)arg;
-
-	//systime_t time;
-
-	int16_t speed = 0;
-	int16_t speed_correction = 0;
-
-	right_motor_set_speed(SPEED);
-	left_motor_set_speed(SPEED);
-
-	chThdSleepMilliseconds(500);   // wait until the rotation is completed before going into the pi control speed
-
-	while(1){
-		//time = chVTGetSystemTime();
-		//waits until the object detection has passed
-		//chBSemWait(&no_obstacle_sem);
-
-		//computes the speed to give to the motors
-		//distance_cm is modified by the image processing thread
-		//speed = pi_regulator(get_distance_cm(), GOAL_DISTANCE);
-		speed = SPEED;
-		//computes a correction factor to let the robot rotate to be in front of the line
-		speed_correction = (get_line_position() - (IMAGE_BUFFER_SIZE/2));
-
-		//if the line is nearly in front of the camera, don't rotate
-		if(abs(speed_correction) < ROTATION_THRESHOLD){
-			speed_correction = 0;
-		}
-
-		//applies the speed from the PI regulator and the correction for the rotation
-		if(get_intersection_bool() != 1){
-		 	right_motor_set_speed(speed - ROTATION_COEFF * speed_correction);
-		    left_motor_set_speed(speed + ROTATION_COEFF * speed_correction);
-		    }
-
-
-		//		if ((speed == 0) ) {  // when line is found, stop the motors and start light choreography
-		//		}
-		//		else {
-		//		    //signals that the goal has not been reached and that the object detection can start again
-		//			chBSemSignal(&goal_not_reached_sem);
-		//}
-		chThdSleepMilliseconds(100);
-	}
-}
-
-
-void pi_regulator_start(void){
-	chThdCreateStatic(waPiRegulator, sizeof(waPiRegulator), NORMALPRIO, PiRegulator, NULL);
 }
 
 void avoid_start(void){

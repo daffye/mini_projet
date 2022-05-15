@@ -2,7 +2,6 @@
 #define PI_REGULATOR_H
 
 //start the PI regulator thread
-//void pi_regulator_start(void);
-int16_t pi_regulator(float distance, float goal);
+void pi_regulator_start(void);
 
 #endif /* PI_REGULATOR_H */

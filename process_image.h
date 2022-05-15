@@ -1,10 +1,10 @@
 #ifndef PROCESS_IMAGE_H
 #define PROCESS_IMAGE_H
+
 #define RED 1
 #define BLUE 2
 #define YELLOW 3
 #define THRESH_INTERSECT 400  //à changer en fct des tailles
-
 
 float get_distance_cm(void);
 uint16_t get_line_position(void);
