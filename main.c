@@ -4,9 +4,7 @@
 #include <math.h>
 
 #include "ch.h"
-#include "chprintf.h"
 #include "hal.h"
-#include "leds.h"
 #include "memory_protection.h"
 #include "sensors/proximity.h"
 #include "sensors/VL53L0X/VL53L0X.h"
@@ -23,6 +21,7 @@
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
+
 
 void SendUint8ToComputer(uint8_t* data, uint16_t size) 
 {
@@ -53,17 +52,13 @@ int main(void)
     /** Inits the Inter Process Communication bus. */
       messagebus_init(&bus, &bus_lock, &bus_condvar);
 
-    clear_leds();
-    set_body_led(0);
     //starts the serial communication
     serial_start();
     //start the USB communication
     usb_start();
-    //spi_comm_start();
     //starts the camera
     dcmi_start();
 	po8030_start();
-	// auto white balance disable
 	po8030_set_awb(0);
 	//inits the motors
 	motors_init();
@@ -74,8 +69,8 @@ int main(void)
 	//wait until the peripherals have been correctly initialized
 	chThdSleepMilliseconds(500);
 
+	//Initialization of the threads for image processing, PI regulator and obstacle detection
 	process_image_start();
-	//stars the threads for the pi regulator and the processing of the image
 	pi_regulator_start();
 	avoid_start();
 
